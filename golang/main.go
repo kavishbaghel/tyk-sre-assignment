@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/TykTechnologies/tyk-sre-assignment/internal/deployments"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -32,7 +34,7 @@ func main() {
 
 	fmt.Printf("Connected to Kubernetes %s\n", version)
 
-	if err := startServer(*listenAddr); err != nil {
+	if err := startServer(*listenAddr, clientset); err != nil {
 		panic(err)
 	}
 }
@@ -52,8 +54,10 @@ func getKubernetesVersion(clientset kubernetes.Interface) (string, error) {
 // startServer launches an HTTP server with defined handlers and blocks until it's terminated or fails with an error.
 //
 // Expects a listenAddr to bind to.
-func startServer(listenAddr string) error {
+func startServer(listenAddr string, clientset kubernetes.Interface) error {
+
 	http.HandleFunc("/healthz", healthHandler)
+	http.HandleFunc("/deployments/health", deployments.DeploymentHealthHandler(clientset))
 
 	fmt.Printf("Server listening on %s\n", listenAddr)
 
