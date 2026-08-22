@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/TykTechnologies/tyk-sre-assignment/internal/deployments"
+	"github.com/TykTechnologies/tyk-sre-assignment/internal/network"
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -58,6 +59,7 @@ func startServer(listenAddr string, clientset kubernetes.Interface) error {
 
 	http.HandleFunc("/healthz", healthHandler)
 	http.HandleFunc("/deployments/health", deployments.DeploymentHealthHandler(clientset))
+	http.HandleFunc("/network/isolate", network.NewHandler(clientset).IsolateWorkloads)
 
 	fmt.Printf("Server listening on %s\n", listenAddr)
 
