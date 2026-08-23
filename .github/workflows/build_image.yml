@@ -63,13 +63,12 @@ jobs:
           context: ./golang
           file: ./golang/Dockerfile
           load: true
-          tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }}
+          tags: ${{ steps.meta.outputs.tags }}
 
       - name: Scan docker image with trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }}
+          image-ref: ${{ steps.meta.outputs.tags }}
           format: json
           output: trivy-report.json
           exit-code: 0
@@ -88,7 +87,7 @@ jobs:
         run: |
           echo "## Trivy Vulnerability Scan" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Image:** \`ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Image:** \`${{ steps.meta.outputs.tags }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
           if jq -e '.Results | map(select(.Vulnerabilities != null and (.Vulnerabilities | length > 0))) | length > 0' trivy-report.json > /dev/null; then
@@ -110,7 +109,7 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker tag ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }} ghcr.io/${{ github.repository }}:latest
-          docker push ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }}
+          docker tag ${{ steps.meta.outputs.tags }} ghcr.io/${{ github.repository }}:latest
+          docker push ${{ steps.meta.outputs.tags }}
           docker push ghcr.io/${{ github.repository }}:latest
 
