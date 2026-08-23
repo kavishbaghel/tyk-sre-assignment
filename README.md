@@ -323,23 +323,16 @@ Reverting an already-removed policy is treated as a successful no-op.
 
 The application queries Kubernetes Deployments using the Kubernetes Go client and evaluates the Deployment's observed state against its desired state.
 
-The implementation considers Deployment rollout information rather than simply checking whether the Deployment object exists.
+The implementation considers Deployment rollout information rather than simply checking whether the Deployment object exists. The Deployment is considered healthy when the number of ready replicas is at least the desired replica count and the controller has observed the current Deployment generation.
 
-A Deployment can temporarily have more Pods than its desired replica count during a rolling update, so total Pod count is not used as the primary health indicator.
+A Deployment is considered healthy when:
 
-For example:
+- `status.readyReplicas >= spec.replicas`
+- `status.observedGeneration >= metadata.generation`
 
-```text
-Desired replicas: 3
+The first check verifies that at least the desired number of replicas are ready.
 
-Old revision:     3 Pods
-New revision:     3 Pods
-Total:            6 Pods
-```
-
-The presence of six Pods does not by itself mean the Deployment is unhealthy.
-
-The important question is whether the current revision has converged to the desired state.
+The second check verifies that the Deployment controller has observed the latest Deployment specification.
 
 ### Design Decisions
 
