@@ -17,9 +17,8 @@ jobs:
 
       - name: Set up Go
         uses: actions/setup-go@v5
-        working-directory: golang
         with:
-          go-version-file: go.mod
+          go-version-file: golang/go.mod
           cache: true
 
       - name: Install dependencies
