@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "tyk-are-assignment-app.fullname" . }}
-  namespace: {{ include "tyk-are-assignment-app.namespace" . }}
+  name: {{ include "tyk-sre-assignment-app.fullname" . }}
+  namespace: {{ include "tyk-sre-assignment-app.namespace" . }}
   labels:
-    {{- include "tyk-are-assignment-app.labels" . | nindent 4 }}
+    {{- include "tyk-sre-assignment-app.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
 
   selector:
     matchLabels:
-      {{- include "tyk-are-assignment-app.selectorLabels" . | nindent 6 }}
+      {{- include "tyk-sre-assignment-app.selectorLabels" . | nindent 6 }}
 
   template:
     metadata:
       labels:
-        {{- include "tyk-are-assignment-app.selectorLabels" . | nindent 8 }}
+        {{- include "tyk-sre-assignment-app.selectorLabels" . | nindent 8 }}
 
     spec:
-      serviceAccountName: {{ include "tyk-are-assignment-app.serviceAccountName" . }}
+      serviceAccountName: {{ include "tyk-sre-assignment-app.serviceAccountName" . }}
 
       containers:
         - name: tyk-sre-assignment

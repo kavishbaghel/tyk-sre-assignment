@@ -1,15 +1,19 @@
 package network
 
 import (
+	"context"
 	"reflect"
 	"strings"
 	"testing"
 
 	networkingv1 "k8s.io/api/networking/v1"
+	"k8s.io/client-go/kubernetes/fake"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestBuildIsolationPolicies(t *testing.T) {
+func TestBuildNetworkIsolationPolicies(t *testing.T) {
 	sourceSelector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"app": "frontend",
@@ -72,6 +76,22 @@ func TestBuildIsolationPolicies(t *testing.T) {
 				)
 			}
 
+			if got := tt.policy.Labels[managedByLabelKey]; got != managedByLabelValue {
+				t.Errorf(
+					"managed-by label = %q, want %q",
+					got,
+					managedByLabelValue,
+				)
+			}
+
+			if got := tt.policy.Labels[isolationLabelKey]; got != isolationLabelValue {
+				t.Errorf(
+					"isolation label = %q, want %q",
+					got,
+					isolationLabelValue,
+				)
+			}
+
 			if !reflect.DeepEqual(
 				tt.policy.Spec.PodSelector,
 				tt.selector,
@@ -102,6 +122,103 @@ func TestBuildIsolationPolicies(t *testing.T) {
 				)
 			}
 		})
+	}
+}
+
+func TestDeleteNetworkIsolationPoliciesNotFound(t *testing.T) {
+	config := IsolationConfig{
+		Source: WorkloadSelector{
+			Namespaces: []string{"source"},
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "frontend",
+				},
+			},
+		},
+		Destination: WorkloadSelector{
+			Namespaces: []string{"destination"},
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "backend",
+				},
+			},
+		},
+	}
+
+	clientset := fake.NewSimpleClientset()
+
+	err := DeleteNetworkIsolationPolicies(
+		context.Background(),
+		clientset,
+		config,
+	)
+
+	if err != nil {
+		t.Fatalf(
+			"DeleteNetworkIsolationPolicies() error = %v, want nil",
+			err,
+		)
+	}
+}
+
+func TestDeleteNetworkIsolationPoliciesRejectsUnmanagedPolicy(t *testing.T) {
+	config := IsolationConfig{
+		Source: WorkloadSelector{
+			Namespaces: []string{"source"},
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "frontend",
+				},
+			},
+		},
+		Destination: WorkloadSelector{
+			Namespaces: []string{"destination"},
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "backend",
+				},
+			},
+		},
+	}
+
+	policies, err := BuildNetworkIsolationPolicies(config)
+	if err != nil {
+		t.Fatalf("BuildNetworkIsolationPolicies() error = %v", err)
+	}
+
+	// Deliberately remove the ownership labels.
+	unmanagedPolicy := policies[0]
+	unmanagedPolicy.Labels = map[string]string{}
+
+	clientset := fake.NewSimpleClientset(&unmanagedPolicy)
+
+	err = DeleteNetworkIsolationPolicies(
+		context.Background(),
+		clientset,
+		config,
+	)
+
+	if err == nil {
+		t.Fatal(
+			"DeleteNetworkIsolationPolicies() error = nil, want error for unmanaged policy",
+		)
+	}
+
+	// Verify the policy was NOT deleted.
+	_, getErr := clientset.
+		NetworkingV1().
+		NetworkPolicies(unmanagedPolicy.Namespace).
+		Get(
+			context.Background(),
+			unmanagedPolicy.Name,
+			metav1.GetOptions{},
+		)
+
+	if getErr != nil {
+		t.Fatalf(
+			"unmanaged policy was deleted, get error = %v",
+			getErr,
+		)
 	}
 }
 
@@ -216,7 +333,7 @@ func TestPolicyNameBuilderDifferentNamespaces(t *testing.T) {
 	}
 }
 
-func TestBuildIsolationPoliciesMultipleNamespaces(t *testing.T) {
+func TestBuildNetworkIsolationPoliciesMultipleNamespaces(t *testing.T) {
 	selector := metav1.LabelSelector{
 		MatchLabels: map[string]string{
 			"app": "frontend",
@@ -269,7 +386,7 @@ func TestBuildIsolationPoliciesMultipleNamespaces(t *testing.T) {
 	}
 }
 
-func TestBuildIsolationPoliciesInvalidConfig(t *testing.T) {
+func TestBuildNetworkIsolationPoliciesInvalidConfig(t *testing.T) {
 	config := IsolationConfig{
 		Source: WorkloadSelector{
 			Namespaces: []string{"frontend"},
@@ -297,5 +414,86 @@ func TestBuildIsolationPoliciesInvalidConfig(t *testing.T) {
 			"policies = %#v, want nil",
 			policies,
 		)
+	}
+}
+
+func TestDeleteNetworkIsolationPolicies(t *testing.T) {
+	config := IsolationConfig{
+		Source: WorkloadSelector{
+			Namespaces: []string{"source"},
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "frontend",
+				},
+			},
+		},
+		Destination: WorkloadSelector{
+			Namespaces: []string{"destination"},
+			LabelSelector: metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "backend",
+				},
+			},
+		},
+	}
+
+	policies, err := BuildNetworkIsolationPolicies(config)
+	if err != nil {
+		t.Fatalf("BuildNetworkIsolationPolicies() error = %v", err)
+	}
+
+	clientset := fake.NewSimpleClientset()
+
+	for i := range policies {
+		_, err := clientset.
+			NetworkingV1().
+			NetworkPolicies(policies[i].Namespace).
+			Create(
+				context.Background(),
+				&policies[i],
+				metav1.CreateOptions{},
+			)
+
+		if err != nil {
+			t.Fatalf(
+				"failed to create test policy %s/%s: %v",
+				policies[i].Namespace,
+				policies[i].Name,
+				err,
+			)
+		}
+	}
+
+	err = DeleteNetworkIsolationPolicies(
+		context.Background(),
+		clientset,
+		config,
+	)
+
+	if err != nil {
+		t.Fatalf(
+			"DeleteNetworkIsolationPolicies() error = %v",
+			err,
+		)
+	}
+
+	for _, policy := range policies {
+		_, err := clientset.
+			NetworkingV1().
+			NetworkPolicies(policy.Namespace).
+			Get(
+				context.Background(),
+				policy.Name,
+				metav1.GetOptions{},
+			)
+
+		if !apierrors.IsNotFound(err) {
+			t.Errorf(
+				"policy %s/%s still exists, get error = %v",
+				policy.Namespace,
+				policy.Name,
+				err,
+			)
+		}
 	}
 }

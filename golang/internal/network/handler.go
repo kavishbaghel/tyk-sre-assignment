@@ -14,6 +14,11 @@ func NewHandler(clientset kubernetes.Interface) *Handler {
 }
 
 func (h *Handler) IsolateWorkloads(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
 	var config IsolationConfig
 	// Parse the request body into the IsolationConfig struct
 	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
@@ -46,6 +51,43 @@ func (h *Handler) IsolateWorkloads(w http.ResponseWriter, r *http.Request) {
 		Message:         "Network isolation policies applied successfully",
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) RevertIsolation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var config IsolationConfig
+
+	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := ValidateIsolationConfig(config); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := DeleteNetworkIsolationPolicies(r.Context(), h.clientset, config); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	response := RevertIsolationResponse{
+		Status:          "isolation removed",
+		PoliciesRemoved: len(config.Source.Namespaces) + len(config.Destination.Namespaces),
+		Message:         "Network isolation policies reverted successfully",
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 

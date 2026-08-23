@@ -63,6 +63,7 @@ func startServer(listenAddr string, clientset kubernetes.Interface) error {
 	http.HandleFunc("/healthz", healthHandler)
 	http.HandleFunc("/deployments/health", deployments.DeploymentHealthHandler(clientset))
 	http.HandleFunc("/network/isolate", network.NewHandler(clientset).IsolateWorkloads)
+	http.HandleFunc("/network/revert", network.NewHandler(clientset).RevertIsolation)
 	http.HandleFunc("/connectivity", connectivity.NewConnectivityHandler(clientset).ToolConnectivityHandler)
 
 	fmt.Printf("Server listening on %s\n", listenAddr)

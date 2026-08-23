@@ -21,6 +21,12 @@ type IsolationResponse struct {
 	Message         string `json:"message,omitempty"`
 }
 
+type RevertIsolationResponse struct {
+	Status          string `json:"status"`
+	PoliciesRemoved int    `json:"policiesRemoved"`
+	Message         string `json:"message,omitempty"`
+}
+
 type Handler struct {
 	clientset kubernetes.Interface
 }
