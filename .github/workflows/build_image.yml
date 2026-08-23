@@ -37,13 +37,12 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract Docker Metadata
-        id: metadata
+        id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=sha, format=short
-            type=raw,value=latest,enable={{is_main_branch}}
+            type=sha,format=short
 
 
       - name: Build and push Docker image
@@ -52,5 +51,5 @@ jobs:
           context: ./golang
           file: ./golang/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/tyk-sre-assignment:latest
+          tags: ${{ steps.meta.outputs.tags }}
 
