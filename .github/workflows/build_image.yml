@@ -29,6 +29,10 @@ jobs:
         working-directory: golang
         run: go mod verify
 
+      - name: Check code formatting
+        working-directory: golang
+        run: go fmt ./...
+
       - name: Run tests
         working-directory: golang
         run: go test ./...
@@ -51,7 +55,6 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=sha,format=short,prefix=
-            type=raw,value=latest,prefix=
 
 
       - name: Build docker image
@@ -59,14 +62,14 @@ jobs:
         with:
           context: ./golang
           file: ./golang/Dockerfile
-          push: false
+          load: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }}
 
       - name: Scan docker image with trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          image-ref: ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }}
           format: json
           output: trivy-report.json
           exit-code: 0
@@ -85,7 +88,7 @@ jobs:
         run: |
           echo "## Trivy Vulnerability Scan" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Image:** \`ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
           if jq -e '.Results | map(select(.Vulnerabilities != null and (.Vulnerabilities | length > 0))) | length > 0' trivy-report.json > /dev/null; then
@@ -107,7 +110,7 @@ jobs:
 
       - name: Push Docker image
         run: |
-          docker tag ghcr.io/${{ github.repository }}:${{ github.sha }} ghcr.io/${{ github.repository }}:latest
-          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+          docker tag ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }} ghcr.io/${{ github.repository }}:latest
+          docker push ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }}
           docker push ghcr.io/${{ github.repository }}:latest
 
