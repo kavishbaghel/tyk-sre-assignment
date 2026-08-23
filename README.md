@@ -550,23 +550,86 @@ GitHub Actions performs:
 Push to main
      |
      v
-Checkout
-     |
-     v
-Setup Go
-     |
-     v
-Run tests
-     |
-     v
-Build container image
-     |
-     v
-Push image
-     |
-     +---- :<commit-sha>
-     |
-     +---- :latest
++----------------------+
+| Checkout repository  |
++----------+-----------+
+           |
+           v
++----------------------+
+| Set up Go            |
+| Version from go.mod  |
++----------+-----------+
+           |
+           v
++----------------------+
+| Download & verify    |
+| Go modules           |
++----------+-----------+
+           |
+           v
++----------------------+
+| Go Quality Checks    |
+|                      |
+| - gofmt              |
+| - go vet             |
+| - go test            |
++----------+-----------+
+           |
+           v
++----------------------+
+| Helm Validation      |
+|                      |
+| - helm lint          |
++----------+-----------+
+           |
+           v
++----------------------+
+| Build Docker Image   |
+|                      |
+| :<commit-sha>        |
++----------+-----------+
+           |
+           v
++----------------------+
+| Trivy Security Scan  |
+|                      |
+| OS packages          |
+| Go/library deps      |
+| All severities       |
++----------+-----------+
+           |
+           v
++----------------------+
+| Generate Report      |
+|                      |
+| trivy-report.json    |
++----------+-----------+
+           |
+           +----------------------+
+           |                      |
+           v                      v
++----------------------+  +----------------------+
+| GitHub Actions       |  | GitHub Actions       |
+| Job Summary          |  | Artifact             |
+|                      |  |                      |
+| Vulnerability        |  | trivy-report-<sha>   |
+| summary              |  |                      |
++----------------------+  +----------+-----------+
+                                      |
+                                      v
+                           +----------------------+
+                           | Push Docker Image    |
+                           |                      |
+                           | :<commit-sha>        |
+                           | :latest              |
+                           +----------+-----------+
+                                      |
+                                      v
+                           +----------------------+
+                           | Published Artifact   |
+                           |                      |
+                           | GHCR                 |
+                           +----------------------+
 ```
 
 ### Design Decisions
@@ -597,6 +660,38 @@ GOOS=linux
 ```
 
 This produces a Linux binary without CGO runtime dependencies.
+
+### Container Security
+
+The CI pipeline scans every built container image using Trivy before publication.
+
+The scan covers:
+
+- Operating-system packages
+- Application/library dependencies
+- Known vulnerabilities across all severities
+
+The security workflow is intentionally designed as:
+
+```text
+Build image
+    |
+    v
+Scan exact image with Trivy
+    |
+    v
+Generate vulnerability report
+    |
+    v
+Publish report as CI artifact
+    |
+    v
+Push the scanned image
+```
+
+The scan is non-blocking and produces a JSON vulnerability report that is retained as a GitHub Actions artifact for 14 days. A summary is also published to the GitHub Actions workflow summary.
+
+The scan is performed against the immutable commit-SHA image, ensuring the security report corresponds to the exact artifact being published. Vulnerabilities without an available fix are ignored to avoid reporting them as actionable findings. The current implementation treats Trivy as a visibility and security-awareness mechanism rather than a release gate. A production environment could introduce severity-based blocking policies based on organizational risk tolerance.
 
 #### Commit SHA image tag
 
