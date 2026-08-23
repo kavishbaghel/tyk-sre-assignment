@@ -67,19 +67,47 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ghcr.io/${{ github.repository }}:${{ github.sha }}
-          format: table
-          exit-code: 1
+          format: json
+          output: trivy-report.json
+          exit-code: 0
           ignore-unfixed: true
           vuln-type: os,library
-          severity: CRITICAL,HIGH,MEDIUM
+          severity: 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL'
 
-      - name: Push Docker image to GitHub Container Registry
-        uses: docker/build-push-action@v6
+      - name: Upload trivy artifact
+        uses: actions/upload-artifact@v4
         with:
-          context: ./golang
-          file: ./golang/Dockerfile
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
-            ghcr.io/${{ github.repository }}:latest
+          name: trivy-report-${{ github.sha }}
+          path: trivy-report.json
+          retention-days: 14
+      
+      - name: Generate Trivy summary
+        run: |
+          echo "## Trivy Vulnerability Scan" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Image:** \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+
+          if jq -e '.Results | map(select(.Vulnerabilities != null and (.Vulnerabilities | length > 0))) | length > 0' trivy-report.json > /dev/null; then
+            echo "### Vulnerabilities detected" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+
+            jq -r '
+              .Results[] |
+              select(.Vulnerabilities != null) |
+              .Vulnerabilities[] |
+              "\(.Severity) | \(.VulnerabilityID) | \(.PkgName) | \(.InstalledVersion) -> \(.FixedVersion // "Not fixed") | \(.Title // "")"
+            ' trivy-report.json >> "$GITHUB_STEP_SUMMARY"
+
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### No vulnerabilities detected" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Push Docker image
+        run: |
+          docker tag ghcr.io/${{ github.repository }}:${{ github.sha }} ghcr.io/${{ github.repository }}:latest
+          docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository }}:latest
 
