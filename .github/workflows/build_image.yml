@@ -1,0 +1,57 @@
+name: Build docker image for Tyk SRE Assignment
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        working-directory: golang
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install dependencies
+        working-directory: golang
+        run: go mod download
+
+      - name: Run tests
+        working-directory: golang
+        run: go test ./...
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker Metadata
+        id: metadata
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=sha, format=short
+            type=raw,value=latest,enable={{is_main_branch}}
+
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./golang
+          file: ./golang/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/tyk-sre-assignment:latest
+

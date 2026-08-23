@@ -1,0 +1,13 @@
+.git
+.github
+.gitignore
+
+*.md
+*.log
+
+coverage/
+tmp/
+bin/
+
+Dockerfile
+.dockerignore
