@@ -1,0 +1,27 @@
+replicaCount: 1
+
+namespace:
+  create: true
+  name: tyk-sre
+
+image:
+  repository: tyk-sre-assignment
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+serviceAccount:
+  create: true
+  name: ""
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 100m
+    memory: 128Mi
+

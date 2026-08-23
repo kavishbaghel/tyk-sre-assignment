@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"k8s.io/client-go/rest"
+
 	"github.com/TykTechnologies/tyk-sre-assignment/internal/connectivity"
 	"github.com/TykTechnologies/tyk-sre-assignment/internal/deployments"
 	"github.com/TykTechnologies/tyk-sre-assignment/internal/network"
@@ -19,7 +21,7 @@ func main() {
 
 	flag.Parse()
 
-	kConfig, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	kConfig, err := buildKubernetesConfig(*kubeconfig)
 	if err != nil {
 		panic(err)
 	}
@@ -76,4 +78,13 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println("failed writing to response")
 	}
+}
+
+// buildKubernetesConfig builds a Kubernetes client configuration based on the provided kubeconfig path.
+func buildKubernetesConfig(kubeconfig string) (*rest.Config, error) {
+	if kubeconfig != "" {
+		return clientcmd.BuildConfigFromFlags("", kubeconfig)
+	}
+
+	return rest.InClusterConfig()
 }
